@@ -25,12 +25,12 @@
       >
       <stop
           id="stop4407"
-          style="stop-color:#ff0000"
+          style="stop-color:#F7931A"
           offset="0"
       />
       <stop
           id="stop4409"
-          style="stop-color:#ff0000;stop-opacity:0"
+          style="stop-color:#F7931A;stop-opacity:0"
           offset="1"
       />
     </linearGradient
@@ -382,6 +382,7 @@
     >
   </g
   >
+  
   <metadata
     >
     <rdf:RDF

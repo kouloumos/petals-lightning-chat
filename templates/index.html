@@ -17,11 +17,99 @@
     <title>Petals &ndash; Decentralized platform for running large language models</title>
     <link href="./static/bootstrap.min.css" rel="stylesheet">
     <link href="./static/style.css" rel="stylesheet">
+    <link href="./static/health.css" rel="stylesheet">
   </head>
   <body>
 
 <main>
   <div class="position-relative overflow-hidden px-5 pt-1 m-md-4 text-center">
+    <a class="toggle-model-health" href="#">see servers</a>
+    <div class="model-health" style="display: none;">
+    {% for model in model_reports %}
+      <section>
+        <p>
+          Model
+          <a target="_blank" href="{{ model.href }}" title="DHT prefix: {{ model.dht_prefix }}">{{ model.name }}</a>
+          (<span class="{{ model.state }}">{{ model.state }}</span>):
+        </p>
+
+        <table class="servers">
+          <thead>
+            <tr>
+              <td>Server ID <a class="show-full-peer-id" href="#">»</a></td>
+              <td>Contributor <a class="explain-public-name" href="#">?</a></td>
+              <td>Lightning Adress <a class="explain-address" href="#">?</a></td>
+              <td>Version</td>
+              <td>Throughput <a class="toggle-rps-details" href="#">»</a></td>
+              <td class="rps-details" style="display: none;">Inference <a class="explain-compute-rps" href="#">?</a></td>
+              <td class="rps-details" style="display: none;">Forward <a class="explain-compute-rps" href="#">?</a></td>
+              <td class="rps-details" style="display: none;">Network <a class="explain-network-rps" href="#">?</a></td>
+              <td>Precision <a class="explain-precision" href="#">?</a></td>
+              <td>Adapters <a class="explain-adapters" href="#">?</a></td>
+              <td>Cache <a class="explain-cache" href="#">?</a></td>
+              <td>Avl. <a class="explain-avl" href="#">?</a></td>
+              <td>Pings <a class="explain-pings" href="#">?</a></td>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in model.server_rows %}
+            <tr>
+              <td>
+                <span class="short-peer-id">{{ row.short_peer_id }}</span>
+                <span class="peer-id" style="display: none;">{{ row.peer_id }}</span>
+              </td>
+              <td class="contributor">
+                {% if row.show_public_name and row.server_info.public_name is not none %}
+                {% if row.server_info.public_name.startswith('http://') or row.server_info.public_name.startswith('https://') %}
+                <a target="_blank" href="{{ row.server_info.public_name }}">{{ row.server_info.public_name.replace('http://', '').replace('https://', '').rstrip('/') | truncate(20, True, '…') }}</a>
+                {% else %}
+                {{ row.server_info.public_name|truncate(20, True, '…') }}
+                {% endif %}
+                {% endif %}
+              </td>
+              <td class="address">
+                {{ row.lightning_address }}
+              </td>
+              <td>{% if row.server_info.version %}{{ row.server_info.version|truncate(10, True, '…') }}{% else %}&lt; 2.0.0{% endif %}</td>
+              <td>{{ "%.0f" | format(row.server_info.throughput) }} tok/s</td>
+              <td class="rps-details" style="display: none;">
+                {% if row.server_info.inference_rps is not none %}{{ "%.0f" | format(row.server_info.inference_rps) }}{% endif %}
+              </td>
+              <td class="rps-details" style="display: none;">
+                {% if row.server_info.forward_rps is not none %}{{ "%.0f" | format(row.server_info.forward_rps) }}{% endif %}
+              </td>
+              <td class="rps-details" style="display: none;">
+                {% if row.server_info.network_rps is not none %}{{ "%.0f" | format(row.server_info.network_rps) }}{% endif %}
+              </td>
+              <td>
+                {% if row.server_info.torch_dtype %}{{ row.server_info.torch_dtype | replace('float', 'f') }}{% endif %}
+                {% if row.server_info.quant_type %}({{ row.server_info.quant_type }}){% endif %}
+              </td>
+              <td>
+                {% for adapter in row.adapters %}
+                <a target="_blank" href="https://huggingface.co/{{adapter.name}}"">{{ adapter.short_name }}</a>
+                {% endfor %}
+              </td>
+              <td>{% if row.server_info.cache_tokens_left is not none %}{{ row.cache_tokens_left_per_block }}{% endif %}</td>
+              <td>{% if row.server_info.using_relay is not none %}{% if row.server_info.using_relay %}Relay{% else %}Direct{% endif %}{% endif %}</td>
+              <td class="ping" data-peer-id="{{ row.peer_id }}">
+                {% if row.server_info.next_pings %}
+                <a class="show" href="#">Show</a>
+                <a class="hide" style="display: none;" href="#">Hide</a>
+                {% endif %}
+                {% for item in row.pings_to_here %}
+                <span style="display: none;" class="rtt" data-source-id="{{ item.source_id }}">
+                {% if item.rtt <= 1 %}{{ "%.1f ms" | format(item.rtt * 1000) }}{% else %}&gt; 5 s{% endif %}
+                </span>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endfor %}
+    </div>
     <div class="col-lg-6 col-md-8 p-md-3 mx-auto my-3" style="max-width: 700px;">
       <div class="mb-4">
         <div class="d-md-inline-block pe-md-4">
@@ -29,7 +117,8 @@
         </div>
         <h1 class="display-4 fw-bold d-md-inline-block justify-content-center" style="font-size: 40pt; vertical-align: middle;">
           Petals
-          <span style="font-size: 25pt; color: #aaa;">Chat</span>
+          <span style="font-size: 22pt; color: #F7931A;">Lightning</span>
+          <span style="font-size: 25pt; color: #aaaaaa;">Chat</span>
         </h1>
       </div>
       <div class="welcome mb-4">
@@ -41,8 +130,10 @@
           <a target="_blank" class="license-link" href="https://bit.ly/llama2-license">terms of use</a>
           and do not enter sensitive data.
           The chat history is recorded.
+          <br/><br/>
+          Current price: <b> 50 sats (~$0.015) per 1k tokens used</b>
         </div>
-        <form id="settings">
+        <!-- <form id="settings">
           <div class="mt-2">
             <label class="group-label">Family:</label>
             <div class="btn-group family-selector" role="group">
@@ -69,13 +160,13 @@
               <label class="btn btn-outline-primary" for="model-llama-65b-hf">LLaMA-65B</label>
             </div>
             <div class="model-selector btn-group" role="group" data-family="bloom" style="display: none;">
-              <!-- <input type="radio" class="btn-check" name="model" value="bigscience/bloom" id="model-bloom">
-              <label class="btn btn-outline-primary" for="model-bloomz">BLOOM-176B</label> -->
+              <input type="radio" class="btn-check" name="model" value="bigscience/bloom" id="model-bloom">
+              <label class="btn btn-outline-primary" for="model-bloomz">BLOOM-176B</label> 
               <input type="radio" class="btn-check" name="model" value="bigscience/bloomz" id="model-bloomz">
               <label class="btn btn-outline-primary" for="model-bloomz">BLOOMZ-176B</label>
             </div>
           </div>
-        </form>
+        </form> -->
       </div>
       <div class="dialogue">
         <p class="human-replica">A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.</p>
@@ -104,5 +195,6 @@
     <script src="https://code.jquery.com/jquery-3.3.1.min.js" crossorigin="anonymous"></script>
     <script src="./static/autosize.min.js"></script>
     <script src="./static/chat.js"></script>
+    <script src="./static/health.js"></script>
   </body>
 </html>

@@ -175,7 +175,7 @@ main p {
   background-color: #fff7f7;
 }
 
-.speed, .generation-controls, .suggest-join {
+.speed, .generation-controls, .suggest-join, .peers {
   display: block;
   color: #999;
   font-size: 9pt;

@@ -71,11 +71,17 @@ const Regime = {
 let curRegime = Regime.CHATBOT;
 let stop = false;
 
+function decodeAuthHeader(auth_header) {
+  const macaroon = auth_header.split("macaroon=")[1].split(" ")[0];
+  const invoice = auth_header.split("invoice=")[1];
+  return { macaroon, invoice };
+}
+
 function openSession() {
   let protocol = location.protocol == "https:" ? "wss:" : "ws:";
   ws = new WebSocket(`${protocol}//${location.host}/api/v2/generate`);
   ws.onopen = () => {
-    ws.send(JSON.stringify({type: "open_inference_session", model: curModel, max_length: sessionLength}));
+    ws.send(JSON.stringify({ type: "open_inference_session", model: curModel, max_length: sessionLength }));
     ws.onmessage = event => {
       const response = JSON.parse(event.data);
       if (!response.ok) {
@@ -108,20 +114,22 @@ function isWaitingForInputs() {
 }
 
 function sendReplica() {
+  console.log("Sending replica")
   if (isWaitingForInputs()) {
     const aiPrompt = (curRegime === Regime.CHATBOT) ? 'Assistant:' : '';
     $('.human-replica:last').text($('.human-replica:last textarea').val());
     $('.dialogue').append($(
       '<p class="ai-replica">' +
-        `<span class="text">${aiPrompt}</span>` +
-        '<span class="loading-animation"></span>' +
-        '<span class="speed" style="display: none;"></span>' +
-        '<span class="generation-controls"><a class="stop-generation" href=#>stop generation</a></span>' +
-        '<span class="suggest-join" style="display: none;">' +
-          '<b>Too slow?</b> ' +
-          '<a target="_blank" href="https://github.com/bigscience-workshop/petals#connect-your-gpu-and-increase-petals-capacity">Connect your GPU</a> ' +
-          'and increase Petals capacity!' +
-        '</span>' +
+      `<span class="text">${aiPrompt}</span>` +
+      '<span class="loading-animation"></span>' +
+      '<span class="speed" style="display: none;"></span>' +
+      '<span class="peers" style="display: none;"></span>' +
+      '<span class="generation-controls" style="display: none;"><a class="stop-generation" href=#>stop generation</a></span>' +
+      '<span class="suggest-join" style="display: none;">' +
+      '<b>Too slow?</b> ' +
+      '<a target="_blank" href="https://github.com/bigscience-workshop/petals#connect-your-gpu-and-increase-petals-capacity">Connect your GPU</a> ' +
+      'and increase Petals capacity!' +
+      '</span>' +
       '</p>'));
     animateLoading();
     $('.stop-generation').click(e => {
@@ -146,9 +154,9 @@ function sendReplica() {
     if (el.is(".human-replica")) {
       phrase += models[curModel].sepToken;
     } else
-    if (i < replicaDivs.length - 1) {
-      phrase += models[curModel].stopToken;
-    }
+      if (i < replicaDivs.length - 1) {
+        phrase += models[curModel].stopToken;
+      }
     replicas.push(phrase);
   }
   const inputs = replicas.join("");
@@ -159,10 +167,12 @@ function sendReplica() {
   receiveReplica(inputs);
 }
 
-function receiveReplica(inputs) {
+function receiveReplica(inputs, authorization = "") {
+  console.log(inputs)
   ws.send(JSON.stringify({
     type: "generate",
     inputs: inputs,
+    authorization,
     max_new_tokens: 1,
     stop_sequence: models[curModel].stopToken,
     extra_stop_sequences: models[curModel].extraStopSequences,
@@ -170,21 +180,49 @@ function receiveReplica(inputs) {
   }));
 
   var lastMessageTime = null;
-  ws.onmessage = event => {
+  ws.onmessage = async event => {
     connFailureBefore = false;  // We've managed to connect after a possible failure
 
     const response = JSON.parse(event.data);
     if (!response.ok) {
-      handleFailure(response.traceback);
-      return;
-    }
+      if (response.status_code == 402) {
+        // payment required
+        if (typeof window.webln !== "undefined") {
+          try {
+            await window.webln.enable();
+            const { preimage } = await window.webln.sendPayment(response.invoice);
 
+            if (!!preimage) {
+              console.log("preimage", preimage)
+              console.log("macaroon", response.macaroon)
+              let auth_header = `L402 ${response.macaroon}:${preimage}`;
+              receiveReplica(inputs, auth_header)
+              console.log("payment done")
+              return
+            } else {
+              console.error("Error sending payment");
+            }
+          } catch {
+            console.log("Send payment canceled");
+            const last_prompt = $('.human-replica').last().text()
+            $('.dialogue p').slice(-2).remove();
+            position = 0;
+            appendTextArea(last_prompt)
+            return;
+          }
+        }
+      }
+      else {
+        handleFailure(response.traceback);
+        return;
+      }
+    }
+    console.log("continues");
     if (lastMessageTime != null) {
       totalElapsed += performance.now() - lastMessageTime;
       nRequests++;
     }
     lastMessageTime = performance.now();
-
     const lastReplica = $('.ai-replica .text').last();
     var newText = lastReplica.text() + response.outputs;
     newText = newText.replace(models[curModel].stopToken, "");
@@ -201,12 +239,17 @@ function receiveReplica(inputs) {
         $('.speed')
           .text(`Speed: ${speed.toFixed(1)} tokens/sec`)
           .show();
+        $('.peers')
+          .text(`Peers: ${response.peers.toString()}`)
+          .show();
+        $('.generation-controls')
+          .show()
         if (speed < 0.5) {
           $('.suggest-join').show();
         }
       }
     } else {
-      $('.loading-animation, .speed, .suggest-join, .generation-controls').remove();
+      $('.loading-animation, .speed, .peers, .suggest-join, .generation-controls').remove();
       resetSession();
       appendTextArea();
       stop = false;
@@ -253,8 +296,8 @@ function retry() {
   sendReplica();
 }
 
-function appendTextArea() {
-  const humanPrompt = (curRegime === Regime.CHATBOT) ? "Human: " : "";
+function appendTextArea(text = "") {
+  const humanPrompt = text ? text : (curRegime === Regime.CHATBOT) ? "Human: " : "";
   $('.dialogue').append($(
     `<p class="human-replica"><textarea class="form-control" id="exampleTextarea" rows="2">${humanPrompt}</textarea></p>`
   ));

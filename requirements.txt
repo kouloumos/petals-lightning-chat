@@ -3,3 +3,6 @@ Flask
 flask-sock
 flask-cors
 gunicorn[gthread]
+pymacaroons
+bolt11
+python-dotenv

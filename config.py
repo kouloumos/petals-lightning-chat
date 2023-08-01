@@ -10,18 +10,30 @@ from petals.constants import PUBLIC_INITIAL_PEERS
 @dataclass
 class ModelInfo:
     repo: str
+    dht_prefix: str
+    name: str
+    href: str
+    n_blocks: int
+    production: bool
     adapter: Optional[str] = None
 
 
 MODELS = [
-    ModelInfo(repo="meta-llama/Llama-2-70b-hf"),
-    ModelInfo(repo="meta-llama/Llama-2-70b-chat-hf"),
-    ModelInfo(repo="enoch/llama-65b-hf"),
-    ModelInfo(repo="enoch/llama-65b-hf", adapter="timdettmers/guanaco-65b"),
+    # ModelInfo(repo="meta-llama/Llama-2-70b-hf"),
+    ModelInfo(
+        repo="meta-llama/Llama-2-70b-chat-hf",
+        dht_prefix="Llama-2-70b-chat-hf",
+        name="meta-llama/Llama-2-70b-chat-hf",
+        href="https://huggingface.co/meta-llama/Llama-2-70b-chat-hf",
+        n_blocks=80,
+        production=True,
+    ),
+    # ModelInfo(repo="enoch/llama-65b-hf"),
+    # ModelInfo(repo="enoch/llama-65b-hf", adapter="timdettmers/guanaco-65b"),
     # ModelInfo(repo="bigscience/bloom"),
-    ModelInfo(repo="bigscience/bloomz"),
+    # ModelInfo(repo="bigscience/bloomz"),
 ]
-DEFAULT_MODEL_NAME = "enoch/llama-65b-hf"
+DEFAULT_MODEL_NAME = "meta-llama/Llama-2-70b-chat-hf"
 
 INITIAL_PEERS = PUBLIC_INITIAL_PEERS
 # Set this to a list of multiaddrs to connect to a private swarm instead of the public one, for example:
